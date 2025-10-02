@@ -1,0 +1,165 @@
+---
+title: "EDA Part 1"
+author: "Seth Grace"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+    df_print: paged
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_float: yes
+    code_download: yes
+  word_document:
+    toc: no
+---
+
+```{r setup, include=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE,warning=FALSE)
+knitr::opts_chunk$set(fig.width=8, fig.height=6)
+
+if(require(pacman)==0)
+   {install.packages("pacman")}
+pacman::p_load(devtools,caret,cluster,dplyr,fastDummies,leaps,pacman,tidyverse,skimr,fastDummies,GGally,DataExplorer,ggrepel,ggthemes,dslabs,scatterplot3d,corrplot, ggforce)
+
+if (!require(mlba)) {
+  library(devtools)
+  install_github("gedeck/mlba/mlba", force=FALSE)
+}
+pacman::p_load(mlba,tidyverse)
+```
+
+# Read the Data In
+```{r}
+df = read.csv('M:/MSBA/ISA 591/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
+```
+
+# Data Overview
+
+## Get an Idea for Data
+```{r}
+head(df)
+skim(df)
+```
+## Summary of Data
+```{r}
+summary(df)
+```
+
+## Frequency for Categorical Data with < 25 levels
+```{r}
+lapply(df[sapply(df, function(x) is.factor(x) & length(levels(x)) < 25)], table)
+```
+# Data Visualization
+
+## Histograms without Outliers
+```{r}
+library(ggforce)
+
+# Page 1
+df |>
+  select(where(is.numeric)) |>
+  pivot_longer(everything()) |>
+  group_by(name) |>
+  filter(value >= quantile(value, 0.01, na.rm = TRUE) & 
+         value <= quantile(value, 0.99, na.rm = TRUE)) |>
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 1)
+
+# Page 2
+df |>
+  select(where(is.numeric)) |>
+  pivot_longer(everything()) |>
+  group_by(name) |>
+  filter(value >= quantile(value, 0.01, na.rm = TRUE) & 
+         value <= quantile(value, 0.99, na.rm = TRUE)) |>
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 2)
+```
+
+## Bar Charts
+```{r}
+library(ggforce)
+df |>
+  select(where(is.factor)) |>
+  select(where(~ nlevels(.) <= 7)) |>
+  pivot_longer(everything()) |>
+  ggplot(aes(x = value)) +
+  geom_bar() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+## Correlation Map
+```{r}
+df |>
+  select(where(is.numeric)) |>
+  cor(use = "complete.obs") |>
+  corrplot(
+    method = "color",
+    tl.cex = 0.8
+  )
+```
+
+# Handle Missing Data
+
+## Remove Unhelpful Variables
+```{r}
+df <- df |> select(-hardship_flag)
+df <- df |> select(-address)
+df <- df |> select(-title)
+```
+
+## Check For Missing Data
+```{r}
+missing = colSums(is.na(df))
+namissing= missing[missing > 0]
+print(namissing)
+```
+
+## Impute Category mths_since_last_delinq
+```{r}
+df$mths_since_last_delinq = factor(df$mths_since_last_delinq)
+df$mths_since_last_delinq = fct_explicit_na(df$mths_since_last_delinq, 'never')
+```
+
+## Check for Duplicates
+```{r}
+df[duplicated(df),]
+```
+
+
+# Outlier Detection
+
+## Boxplots 
+```{r}
+library(ggforce)
+
+# Page 1
+df |>
+  select(where(is.numeric), loan_default) |>
+  pivot_longer(-loan_default) |>
+  ggplot(aes(x = loan_default, y = value)) +
+  geom_boxplot() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 1)
+
+# Page 2
+df |>
+  select(where(is.numeric), loan_default) |>
+  pivot_longer(-loan_default) |>
+  ggplot(aes(x = loan_default, y = value)) +
+  geom_boxplot() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 2)
+```
+
+# Data Transformation
+
+## Convert Factors to Lower Case to Clean a Bit
+```{r}
+df <- df |>
+  mutate(across(where(is.factor), ~ factor(tolower(as.character(.x))))
+  )
+```
+
